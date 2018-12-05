@@ -12,7 +12,9 @@ Project consists of files:
 6. eda_and_eval_report.HTML - generated report
  
  
-**dataset.csv - file consists of features:**
+#dataset.csv 
+
+file consists of features:
 
 RDN - energy prices in Polish Power Exchange
 CRO - energy prices in balancing markets
