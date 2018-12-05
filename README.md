@@ -34,7 +34,7 @@ this code is responsible for two tasks:
 
 Firstly, it generates any new features based on prices time-series : lags of prices in time, moving average, moving standard deviations, some financial ratios etc. Those features will be further called "time-series features". In next step data is divided into train (first 600 observations) and test (144 observations) sets.
 
-Secondly, ARIMAX model of energy prices is built and forecasts are made in a loop for every day of test datase (updating train dataset of every day from test data with every iteration).
+Secondly, ARIMAX model of energy prices is built and forecasts are made in a loop for every day of test dataset (updating train dataset of every day from test data with every iteration).
 
 
 ### featue_engineergin.py 
