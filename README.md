@@ -38,7 +38,7 @@ Secondly, ARIMAX model of energy prices is built and forecasts are made in a loo
 
 
 ### featue_engineergin.py 
-Because "time-series features" are highly correlated (with prices and between themselves), dimensionality reduction were used. Previously separated train dataset were divided into new train and new test datasets to train and evaluate PCA and few type of autoencoders (evaluation was define as building linear regression forecasting prices on reduced and original features, and comparing models accuracy using R^2 measure). After that, all data were transformed using most efficient metods of dimensionality reduction.
+Because "time-series features" are highly correlated (with prices and between themselves) and very noisy, dimensionality reduction were used. Previously separated train dataset were divided into new train and new test datasets to train and evaluate PCA and few type of autoencoders (evaluation was define as building linear regression forecasting prices on reduced and original features, and comparing models accuracy using R^2 measure). After that, all data were transformed using most efficient metods of dimensionality reduction.
 
 
 ### model_xtb.py 
