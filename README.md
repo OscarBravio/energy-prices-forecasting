@@ -6,7 +6,7 @@ Project consists of files:
 
 1. dataset.csv - data used in forecasting
 2. feature_processing_and_arimax.R - code generating features and running ARIMAX model with forecasts in a loop
-3. featue_engineergin.py - dimensionality reduction of data using autoencoders
+3. featue_engineering.py - dimensionality reduction of data using autoencoders
 4. model_xtb.py - modeling and forecasting energy prices in a loop using variety of ML algorithms and features transformed in previous steps
 5. eda_and_eval_report.ipynb - Jupyter notebook generating exploratory analysis and cross-validation in time of forecasts
 6. eda_and_eval_report.HTML - generated report
@@ -37,7 +37,7 @@ Firstly, it generates any new features based on prices time-series : lags of pri
 Secondly, ARIMAX model of energy prices is built and forecasts are made in a loop for every day from test dataset (updating train dataset with every day from test data with every iteration).
 
 
-### featue_engineergin.py 
+### featue_engineering.py 
 Because "time-series features" are highly correlated (with prices and between themselves) and very noisy, dimensionality reduction were used. Previously separated train dataset were divided into new train and new test datasets to train and evaluate PCA and few type of autoencoders (evaluation was define as building linear regression forecasting prices on reduced and original features, and comparing models accuracy using R^2 measure). After that, all data were transformed using most efficient metods of dimensionality reduction.
 
 
