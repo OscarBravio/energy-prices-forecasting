@@ -17,7 +17,7 @@ Below there are descriptions of files mentioned above:
 
 file consists of features:
 
-1. RDN - energy prices in Polish Power Exchange (price we want to forecast)
+1. RDN - energy prices in Polish Power Exchange (***price we want to forecast***)
 2. CRO - energy prices in balancing markets
 3. SE - energy prices in Sweden
 4. demand - predicted demand on energy
