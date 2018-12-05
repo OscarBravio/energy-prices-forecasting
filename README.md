@@ -17,13 +17,13 @@ Below there are descriptions of files mentioned above:
 
 file consists of features:
 
-RDN - energy prices in Polish Power Exchange
-CRO - energy prices in balancing markets
-SE - energy prices in Sweden
-demand - predicted demand on energy
-supply - predicted production of powerplants
-wind_prod - predicted production of windparks
-reserve - predisvted system energy reserve
+1. RDN - energy prices in Polish Power Exchange (price we want to forecast)
+2. CRO - energy prices in balancing markets
+3. SE - energy prices in Sweden
+4. demand - predicted demand on energy
+5. supply - predicted production of powerplants
+6. wind_prod - predicted production of windparks
+7. reserve - predisvted system energy reserve
 
 those features will be further called "fundamental features"
 
