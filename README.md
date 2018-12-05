@@ -1,4 +1,4 @@
-# energy-prices-forecasting
+### energy-prices-forecasting
 
 Aim of the project is forecasting market energy prices (on Polish Power Exchange) using machine-learning methods like autoencoders and recurrent neural networks. 
 
@@ -12,7 +12,7 @@ Project consists of files:
 6. eda_and_eval_report.HTML - generated report
  
  
-# dataset.csv 
+### dataset.csv 
 
 file consists of features:
 
@@ -27,7 +27,7 @@ reserve - predisvted system energy reserve
 those features will be further called "fundamental features"
 
 
-# feature_processing_and_arimax.R 
+### feature_processing_and_arimax.R 
 
 this code is responsible for two tasks:
 
@@ -36,7 +36,7 @@ Firstly, it generates any new features based on prices time-series : lags of pri
 Secondly, ARIMAX model of energy prices is built and forecasts are made in a loop for every day of test datase (updating train dataset of every day from test data with every iteration).
 
 
-# featue_engineergin.py 
+### featue_engineergin.py 
 Because "time-series features" are highly correlated (with prices and between themselves), dimensionality reduction were used. Previously separated train dataset were divided into new train and new test datasets to train and evaluate PCA and few type of autoencoders (evaluation was define as building linear regression forecasting prices on reduced and original features, and comparing models accuracy using R^2 measure). After that, all data were transformed using most efficient metods of dimensionality reduction.
 
 
