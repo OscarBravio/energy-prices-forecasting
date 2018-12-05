@@ -10,8 +10,8 @@ Project consists of files:
 4. model_xtb.py - modeling and forecasting energy prices in a loop using variety of ML algorithms and features transformed in previous steps
 5. eda_and_eval_report.ipynb - Jupyter notebook generating exploratory analysis and cross-validation in time of forecasts
 6. eda_and_eval_report.HTML - generated report
-
-
+ 
+ 
 1. dataset.csv - file consists of features:
 
 RDN - energy prices in Polish Power Exchange
