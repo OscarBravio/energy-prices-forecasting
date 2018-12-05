@@ -1,4 +1,4 @@
-### energy-prices-forecasting
+# energy-prices-forecasting
 
 Aim of the project is forecasting market energy prices (on Polish Power Exchange) using machine-learning methods like autoencoders and recurrent neural networks. 
 
@@ -41,5 +41,5 @@ Secondly, ARIMAX model of energy prices is built and forecasts are made in a loo
 Because "time-series features" are highly correlated (with prices and between themselves), dimensionality reduction were used. Previously separated train dataset were divided into new train and new test datasets to train and evaluate PCA and few type of autoencoders (evaluation was define as building linear regression forecasting prices on reduced and original features, and comparing models accuracy using R^2 measure). After that, all data were transformed using most efficient metods of dimensionality reduction.
 
 
-# model_xtb.py 
+### model_xtb.py 
 Data transformed in previous step were used to built models forecasting energy prices - random forests, linear regression with different penalties, multi-layer perceptrons and recurrent neural networks with different parameters. Again, all forecasts were calculated in a loop, using the same method as in (2)
