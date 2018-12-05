@@ -23,7 +23,7 @@ file consists of features:
 4. demand - predicted demand on energy
 5. supply - predicted production of powerplants
 6. wind_prod - predicted production of windparks
-7. reserve - predisvted system energy reserve
+7. reserve - predicted system energy reserve
 
 those features will be further called "fundamental features"
 
