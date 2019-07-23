@@ -2,141 +2,100 @@
 library(readr)
 library(forecast)
 library(TSA)
+library(stringr)
 library(quantmod)
+library(dplyr)
 
-df <- read_csv("~/Desktop/energy-prices-forecasting/dane.csv")
-
-weekends=c(20180407,20180408,20180414,20180415,20180421,20180422,20180428,20180429,
-           20180501,20180503,20180505,20180506,20180512,20180513,20180519,20180520,
-           20180526,20180527,20180602,20180603,20180609,20180610,20180617,20180618)
+df <- read_csv("~/Oskar/energy-prices-forecasting/new_df.csv")
+#test_df <- read_csv("~/Oskar/energy-prices-forecasting/test_df.csv")
 
 
-# adding flag to data if day is weekend or not
+# exploratory analysis - checking stationarity of time-series
 
-weekeneds=cbind(weekends,rep(1,length(weekends)))
-colnames(weekeneds)=c('Data','weekend')
+week_ma=df[c('ma_rdn_168','ma_cro_168')]
 
-df2=merge(df,weekeneds,by='Data',all.x = TRUE)
-df2$weekend[is.na(df2$weekend)==T]=0
+z=scale(week_ma)
 
-# sort by dates and hours
+km1=kmeans(z,4)
 
-df2=df2[order(df2$Data,df2$godz),]
+kol1=km1$cluster+1
 
+grouped_feat=group_by(as.data.frame(cbind(df$ma_cro_168,df$ma_rdn_168,kol1)),kol1)
+summarise(grouped_feat,mean(V1),mean(V2))
 
-# creating time-series features - lags, moving averages, moving standard deviations, ratios etc.
-
-cro2=Lag(df2$cro,72)
-cro3=Lag(df2$cro,73)
-cro4=Lag(df2$cro,96)
-cro5=Lag(df2$cro,168)
-
-ma_cro2=(cro2+cro4)/2
-ma_cro3=(cro2+cro4+cro5)/3
-
-sd_cro1=apply(cbind(cro2,cro4),1,sd)
-sd_cro2=apply(cbind(cro2,cro4,cro5),1,sd)
-
-ratio_cro1=(ma_cro2-ma_cro3)/(sd_cro2+1)
-ratio_cro2=(sd_cro1-sd_cro2)/(sd_cro2+1)
-
-fix2=Lag(df2$rdn,24)
-fix3=Lag(df2$rdn,25)
-fix4=Lag(df2$rdn,48)
-fix5=Lag(df2$rdn,72)
-fix6=Lag(df2$rdn,168)
-
-ma_fix2=(fix2+fix4)/2
-ma_fix3=(fix2+fix4+fix5)/3
-ma_fix4=(fix2+fix4+fix5+fix6)/4
-
-sd_fix1=apply(cbind(fix2,fix4),1,sd)
-sd_fix2=apply(cbind(cro2,cro4,cro5),1,sd)
-
-se2=lag(df2$SE4,24)
-se3=lag(df2$SE4,48)
-se4=lag(df2$SE4,72)
-
-z=cbind(cro2,cro3,cro4,cro5,ma_cro2,ma_cro3,sd_cro1,sd_cro2,ratio_cro1,ratio_cro2,
-        fix2,fix3,fix4,fix5,fix6,ma_fix2,ma_fix3,ma_fix4,sd_fix1,sd_fix2,
-        se2,se3,se4)
-
-colnames(z)=cbind('cro2','cro3','cro4','cro5','ma_cro2','ma_cro3','sd_cro1','sd_cro2','ratio_cro1','ratio_cro2',
-        'fix2','fix3','fix4','fix5','fix6','ma_fix2','ma_fix3','ma_fix4','sd_fix1','sd_fix2',
-        'se2','se3','se4')
-
-z_col=colnames(z)
+plot(df$ma_cro_168,col=kol1)
+plot(df$ma_rdn_168,col=kol1)
 
 
-# fundamental features
+# train-test split
 
-x1=df2[c('godz','deman','supply','wind_prod','reserve','cro','rdn','weekend')]
+df2=subset(df, day>9)
 
-x=cbind(x1,z)
+train_split=round((max(df2$day)-min(df2$day))*0.67)+min(df2$day)
 
-n=nrow(x)
-
-
-# train-test division and saving data
-
-x_train=x[169:(n-144),]
-x_test=x[(n-143):n,]
-
-write_csv(x_train,'~/Desktop/energy/train_data.csv')
-write_csv(x_test,'~/Desktop/energy/test_data.csv')
-
-eee=prcomp(z[200:nrow(z),])
-summary(eee)
-
-# linear regression - logarithm of prices dependent on fundamental features
-
-x=x_train[c('deman','supply','wind_prod','reserve','cro2','ma_cro2','se2')]
-y=x_train$rdn
-
-model1=lm(log(y+1)~.,x)
-summary(model1)
+train_df=subset(df, day>10)
+test_df=df[481:nrow(df),]
 
 
-# calculate residuals
+# building ARIMA models
 
-e=model1$residuals
+x_cols=c('demand','supply1','supply2','wind','reserve')
 
+rdn_ts=ts(train_df$lag_rdn_24, frequency=24)
+cro_ts=ts(train_df$lag_cro_72, frequency=24)
 
-# transforming residuals into time-series 
+model1=arimax(log(rdn_ts+1),order=c(1,1,1),seasonal=c(1,0,0),xreg=train_df[x_cols])
 
-rdn_ts=ts(e,frequency=24)
+model2=arimax(log(cro_ts+1),order=c(1,1,1),seasonal=c(1,0,0),xreg=train_df[x_cols])
 
+arima_rdn=as.vector(exp(stats::predict(model1,newx=train_df[x_cols])$pred)-1)
+arima_cro=as.vector(exp(stats::predict(model2,newx=train_df[x_cols])$pred)-1)
 
-# checking optimal ARIMA parameters of residuals
+x_train2=cbind(train_df,arima_rdn,arima_cro)
 
-model01=auto.arima(rdn_ts)
-summary(model01)
-
-x2=x[c('deman','supply','wind_prod','reserve','cro2','ma_cro2','se2')]
-x3=x_test[c('deman','supply','wind_prod','reserve','cro2','ma_cro2','se2')]
-y_test=x_test$rdn
+write_csv(x_train2,'~/Oskar/energy-prices-forecasting/train_df.csv')
 
 # arimax models - forecasts in a loop
 
-iters=nrow(x3)/24
+iters=nrow(test_df)/24
 
-predictions=c()
+pred_rdn=c()
+pred_cro=c()
+
+x=train_df[x_cols]
+xt=test_df[x_cols]
+
+y1=rdn_ts
+y2=cro_ts
+
+y_test1=test_df$rdn
+y_test2=test_df$cro
 
 for (i in 1:iters){
 
-    model3=arimax(log(y+1),order=c(0,1,1),seasonal=c(2,0,0),xreg=x2)
+    model1=arimax(log(y1+1),order=c(2,1,1),seasonal=c(1,0,0),xreg=x)
+    model2=arimax(log(y2+1),order=c(2,1,1),seasonal=c(1,0,0),xreg=x)
     
     # forecasts
-    x_t=x3[(1+24*(i-1)):(24*i),]
-    pred_t=as.vector(stats::predict(model3,newx=x_t)$pred)
+    x_i=xt[(1+24*(i-1)):(24*i),]
+    pred_t1=as.vector(exp(stats::predict(model1,newx=x_i)$pred)-1)
+    pred_t2=as.vector(exp(stats::predict(model2,newx=x_i)$pred)-1)
     
-    predictions=c(predictions,pred_t)
-    x2=rbind(x2,x_t)
-    y=c(y,y_test[(1+24*(i-1)):(24*i)])
+    pred_rdn=c(pred_rdn,pred_t1)
+    pred_cro=c(pred_cro,pred_t2)
+    
+    x=rbind(x,x_i)
+    
+    y1=ts(c(as.vector(y1),y_test1[(1+24*(i-1)):(24*i)]),frequency=24)
+    y2=ts(c(as.vector(y2),y_test2[(1+24*(i-1)):(24*i)]),frequency=24)
+    
 }
 
 # because logarithm of price was forecasted, we have to invert transformation back to original price
 
-inv_pred=exp(predictions)-1
-write_csv(as.data.frame(inv_pred),'~/Desktop/energy/arimax_forecasts.csv')
+arima_rdn=pred_rdn
+arima_cro=pred_cro
+
+x_test2=cbind(test_df,arima_rdn,arima_cro)
+write_csv(x_test2,'~/Oskar/energy-prices-forecasting/test_df.csv')
 

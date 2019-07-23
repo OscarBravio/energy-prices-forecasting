@@ -8,178 +8,351 @@ Created on Wed Oct 31 16:35:49 2018
 
 import pandas as pd
 import numpy as np
+import time
+import gc
+import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.ensemble import GradientBoostingRegressor
 from keras.models import Sequential
 from keras.layers import Dense, Activation, Dropout, Input, LSTM, SimpleRNN
 from keras.utils import to_categorical
 from keras.optimizers import SGD, Adam
 from keras.models import Model
-from keras import regularizers
+from keras.regularizers import l1, l2, l1_l2
 from keras import backend as K
 
-
-df=pd.read_csv("~/Desktop/energy/train_data.csv")
-
-
-# fundamental features
-
-x=df[['rdn','deman','supply','wind_prod','reserve']]
-
-y=df['rdn']
-  
-df=df.reset_index() 
-
-n=df.shape[0]
+#import lightgbm as lgb
 
 
-# time-series features for dimensionality reduction
 
-z=df[['cro2','cro3','cro4','cro5','ma_cro2','ma_cro3','sd_cro1','sd_cro2','ratio_cro1','ratio_cro2',
-        'fix2','fix3','fix4','fix5','fix6','ma_fix2','ma_fix3','ma_fix4','sd_fix1','sd_fix2',
-        'se2','se3','se4']]
+def sample_neurons(n, max_neurons):
+
+    z=np.random.uniform(5,max_neurons,size=n).astype('int')
+    return(z)
+
+
+def mutate_neurons(neurons):
+
+    z=neurons+np.random.normal(0,5,size=len(neurons)).astype('int')
+    y=np.where(z>0,z,neurons)
+
+    return(y)
+
+
+def sample_activs(n):
+
+    z=np.random.choice(['tanh','relu'],n)
+    return(z)
+
+
+def sample_drop(n):
+
+    z=np.round(np.random.exponential(size=n)/10.,1)
+    return(z)
+
+
+def sample_reg(n):
+
+    z=np.random.exponential(size=n)/10.
+    p=np.random.uniform(size=n)
+
+    y=np.where(p>.5,0,z)
+
+    return(y)
+
+
+def mutate_reg(reg):
+
+    z=reg+np.random.uniform(-.1,.1,size=len(reg))
+    y=np.where(z>0,z,0)
+
+    return(y)
+
+
+def sample_iters(n):
+
+    z=np.random.uniform(50,500,size=n).astype('int')
+    return(z)
+
+
+def mutate_iters(iters):
+
+    z=iters+np.random.normal(0,100,size=len(iters)).astype('int')
+    y=np.where(z>0,z,iters)
+
+    return(y)
+
+
+def mse_error(y_pred, y_real):
+
+    z=(y_pred-y_real)**2
+    return(z)
+
+
+def ae_model(x, ae_neurons, l1_reg, l2_reg, drop_out, n_iter):
+
+    ae=Sequential()
+    ae.add(Dense(ae_neurons, activation='tanh', activity_regularizer=l1_l2(l1=l1_reg, l2=l2_reg), input_dim=x.shape[1]))
+    ae.add(Dropout(drop_out))
+    ae.add(Dense(x.shape[1], activation='linear',input_dim=ae_neurons))
+
+    ae.compile(loss='mean_squared_error', optimizer='adam')
+    ae.fit(np.array(x), np.array(x), epochs=n_iter, batch_size=32)
+
+    return(ae)
+
+
+def rnn_model(model, x, y, rnn_neurons1, rnn_neurons2, activs, n_iter):
+
+    if model=='forward_rucurrent':
+
+        rnn=Sequential()
+        rnn.add(SimpleRNN(rnn_neurons1, activation=activs, input_shape=(24, x.shape[2])))
+        rnn.add(Dense(rnn_neurons2, activation=activs, input_dim=rnn_neurons1))
+        rnn.add(Dense(24, activation='linear', input_dim=rnn_neurons2))
+
+    elif model=='recurrent_forward':
+
+        rnn=Sequential()
+        rnn.add(Dense(rnn_neurons1, activation=activs, input_shape=(24, x.shape[2])))
+        rnn.add(SimpleRNN(rnn_neurons2, activation=activs, input_dim=rnn_neurons1))
+        rnn.add(Dense(24, activation='linear', input_dim=rnn_neurons2))
+
+    else:
+
+        print('WRONG MODEL!!!')
+
+    rnn.compile(loss='mean_squared_error', optimizer='adam')
+    rnn.fit(x, y, epochs=n_iter, batch_size=32)
+
+    return(rnn)
+
+
+def tuning_job(model, z_train, z_test, x_train, x_test, y_train, y_test,
+               ae_neurons, ae_l1, ae_l2, ae_drops, nn_iter1,
+               rnn_neurons1, rnn_neurons2, rnn_activs, nn_iter2):
+
+    ae=ae_model(z_train, ae_neurons, ae_l1, ae_l2, ae_drops, nn_iter1)
+
+    time.sleep(1)
+
+    get_layer = K.function([ae.layers[0].input, K.learning_phase()],[ae.layers[0].output])
+    h = np.array(get_layer([z_train])).reshape(z_train.shape[0], ae_neurons)
+
+    new_x=pd.concat([pd.DataFrame(x_train),pd.DataFrame(h)],axis=1)
+    x_ts=np.array(new_x).reshape(new_x.shape[0]/24,24,new_x.shape[1])
+
+
+    rnn=rnn_model(model, x_ts, y_train, rnn_neurons1, rnn_neurons2, rnn_activs, nn_iter2)
+
+    time.sleep(1)
+
+    h_test=np.array(get_layer([z_test])).reshape(z_test.shape[0], ae_neurons)
+
+    new_x=pd.concat([pd.DataFrame(x_test),pd.DataFrame(h_test)],axis=1)
+    x_ts=np.array(new_x).reshape(new_x.shape[0]/24,24,new_x.shape[1])
+
+    pred=rnn.predict(x_ts)
+    error=mse_error(pred,y_test).sum()
+
+    del ae, rnn
+    gc.collect()
+
+    return(error)
+
+
+def random_tuning_job(model, z_train, z_test, x_train, x_test, y_train, y_test, n):
+
+    ae_neurons=sample_neurons(n,50)
+    ae_l1=sample_reg(n)
+    ae_l2=sample_reg(n)
+    ae_drops=sample_drop(n)
+
+    rnn_neurons1=sample_neurons(n,50)
+    rnn_neurons2=sample_neurons(n,50)
+    rnn_activs=sample_activs(n)
+
+    nn_iter1=np.random.uniform(500,3000,size=n).astype('int')
+    nn_iter2=np.random.uniform(100,300,size=n).astype('int')
+
+    evaluate=[]
+
+    for i in range(n):
+
+        error=tuning_job(model, z_train, z_test, x_train, x_test, y_train, y_test,
+               ae_neurons[i], ae_l1[i], ae_l2[i], ae_drops[i], nn_iter1[i],
+               rnn_neurons1[i], rnn_neurons2[i], rnn_activs[i], nn_iter2[i])
+
+        evaluate.append(error)
+
+        del error
+        gc.collect()
+
+    output=pd.DataFrame({'ae_neurons':ae_neurons, 'ae_l1':ae_l1, 'ae_l2':ae_l2, 'ae_drops': ae_drops, 'nn_iter1':nn_iter1,
+                     'rnn_neurons1':rnn_neurons1, 'rnn_neurons2':rnn_neurons2, 'rnn_activs':rnn_activs, 'nn_iter2':nn_iter2,
+                     'mse_error':evaluate})
+
+    output['method']=np.repeat('random',output.shape[0])
+
+    return(output)
+
+
+
+def evolution_tuning_job(model, z_train, z_test, x_train, x_test, y_train, y_test, good_params):
+
+    ae_neurons=mutate_neurons(good_params['ae_neurons'])
+    ae_l1=mutate_reg(good_params['ae_l1'])
+    ae_l2=mutate_reg(good_params['ae_l2'])
+    ae_drops=mutate_reg(good_params['ae_drops'])
+
+    rnn_neurons1=mutate_neurons(good_params['rnn_neurons1'])
+    rnn_neurons2=mutate_neurons(good_params['rnn_neurons2'])
+
+    nn_iter1=mutate_iters(good_params['nn_iter1'])
+    nn_iter2=mutate_iters(good_params['nn_iter2'])
+
+    rnn_activs=good_params['rnn_activs']
+
+    evaluate=[]
+
+    n=good_params.shape[0]
+
+    for i in range(n):
+
+        error=tuning_job(model, z_train, z_test, x_train, x_test, y_train, y_test,
+               ae_neurons[i], ae_l1[i], ae_l2[i], ae_drops[i], nn_iter1[i],
+               rnn_neurons1[i], rnn_neurons2[i], rnn_activs[i], nn_iter2[i])
+
+        evaluate.append(error)
+
+        del error
+        gc.collect()
+
+
+    output=pd.DataFrame({'ae_neurons':ae_neurons, 'ae_l1':ae_l1, 'ae_l2':ae_l2, 'ae_drops': ae_drops, 'nn_iter1':nn_iter1,
+                     'rnn_neurons1':rnn_neurons1, 'rnn_neurons2':rnn_neurons2, 'rnn_activs':rnn_activs, 'nn_iter2':nn_iter2,
+                     'mse_error':evaluate})
+
+    output['method']=np.repeat('optimize - evolution',output.shape[0])
+
+    return(output)
+
+
+def genetic_tuning_job(model, z_train, z_test, x_train, x_test, y_train, y_test, params):
+
+    ae_neurons=int(params['ae_neurons'].mean())
+    ae_l1=float(params['ae_l1'].mean())
+    ae_l2=float(params['ae_l2'].mean())
+    ae_drops=float(good_params['ae_drops'].mean())
+
+    rnn_neurons1=int(params['rnn_neurons1'].mean())
+    rnn_neurons2=int(params['rnn_neurons2'].mean())
+
+    nn_iter1=int(params['nn_iter1'].mean())
+    nn_iter2=int(params['nn_iter2'].mean())
+
+    rnn_activs=list(params['rnn_activs'])[0]
+
+
+    evaluate=tuning_job(model, z_train, z_test, x_train, x_test, y_train, y_test,
+             ae_neurons, ae_l1, ae_l2, ae_drops, nn_iter1,
+             rnn_neurons1, rnn_neurons2, rnn_activs, nn_iter2)
+
+
+    output=pd.DataFrame({'ae_neurons':ae_neurons, 'ae_l1':ae_l1, 'ae_l2':ae_l2, 'ae_drops': ae_drops, 'nn_iter1':nn_iter1,
+                     'rnn_neurons1':rnn_neurons1, 'rnn_neurons2':rnn_neurons2, 'rnn_activs':rnn_activs, 'nn_iter2':nn_iter2,
+                     'mse_error':evaluate},index=[0])
+
+    output['method']=np.repeat('optimize - crossover',output.shape[0])
+
+    return(output)
+
+
+
+
+# sampling neurons
+
+
+train_df=pd.read_csv("~/Oskar/energy-prices-forecasting/train_df.csv")
+test_df=pd.read_csv("~/Oskar/energy-prices-forecasting/test_df.csv")
+
+
+# choosing fundamental features
+
+x_cols=['godz','deman','supply','wind_prod','reserve','weekend','month','arima_rdn','arima_cro']
+
+
+# choosing time-series features for dimentionality reduction
+
+ts_cols=['lag_rdn_24','lag_rdn_25','lag_rdn_26','lag_rdn_48','lag_rdn_72','lag_rdn_96','lag_rdn_168','lag_cro_72','lag_se_24','lag_se_48','lag_se_72',
+ 'ma_rdn_24','ma_rdn_48','ma_rdn_72','ma_rdn_96','ma_rdn_168','med_rdn_24','med_rdn_48','med_rdn_72','med_rdn_96','med_rdn_168','sd_rdn_24','sd_rdn_48',
+ 'sd_rdn_72','sd_rdn_96','sd_rdn_168','ma_cro_24','ma_cro_48','ma_cro_72','ma_cro_96','ma_cro_168','med_cro_24','med_cro_48','med_cro_72','med_cro_96',
+ 'med_cro_168','sd_cro_24','sd_cro_48','sd_cro_72','sd_cro_96','sd_cro_168']
 
 
 # scaling data
 
-model0=StandardScaler()
-model0.fit(z)
+model1=StandardScaler()
+model1.fit(train_df[ts_cols])
 
-new_x=model0.transform(z)
+model2=StandardScaler()
+model2.fit(train_df[x_cols])
 
+z_train=model1.transform(train_df[ts_cols])
+x_train=model2.transform(train_df[x_cols])
 
-# train-test split
-
-new_train, new_test, new_train2, new_test2 = train_test_split(new_x, df['rdn'], test_size=0.2)
-
-
-# fitting PCA and few different autoencoders
-
-PCA_model=PCA(n_components=15)
-PCA_model.fit(new_train)
-
-n_col=z.shape[1]
-
-K.set_learning_phase(1)
-
-ae1=Sequential()
-ae1.add(Dense(15, activation='relu',input_dim=n_col))
-ae1.add(Dense(n_col, activation='linear',input_dim=15))
-
-ae1.compile(loss='mean_squared_error', optimizer='adam')
-ae1.fit(np.array(new_train), np.array(new_train), epochs=500, batch_size=32)
+z_test=model1.transform(test_df[ts_cols])
+x_test=model2.transform(test_df[x_cols])
 
 
-ae2=Sequential()
-ae2.add(Dense(15, activation='tanh',input_dim=n_col))
-ae2.add(Dense(n_col, activation='linear',input_dim=15))
 
-ae2.compile(loss='mean_squared_error', optimizer='adam')
-ae2.fit(np.array(new_train), np.array(new_train), epochs=500, batch_size=32)
+# transforming time-series data as input for recurrent neural networks
 
 
-ae3=Sequential()
-ae3.add(Dense(15, activation='tanh',input_dim=n_col))
-ae3.add(Dropout(0.1))
-ae3.add(Dense(n_col, activation='linear',input_dim=15))
+y=train_df['cro']
 
-ae3.compile(loss='mean_squared_error', optimizer='adam')
-ae3.fit(np.array(new_train), np.array(new_train), epochs=1000, batch_size=32)
+y_mean=float(y.mean())
+y_sd=float(y.std())
 
+y1=(y-y_mean)/y_sd
 
-ae4=Sequential()
-ae4.add(Dense(30, activation='tanh',input_dim=n_col))
-ae4.add(Dropout(0.2))
-ae4.add(Dense(15, activation='tanh',input_dim=30))
-ae4.add(Dropout(0.1))
-ae4.add(Dense(n_col, activation='linear',input_dim=15))
+y2=(test_df['cro']-y_mean)/y_sd
 
-adam1=Adam(lr=.00, decay=.05)
-ae4.compile(loss='mean_squared_error', optimizer='adam')
-ae4.fit(np.array(new_train), np.array(new_train), epochs=2000, batch_size=32)
+y_train=y1.values.reshape(y1.shape[0]/24,24)
+
+y_test=y2.values.reshape(y2.shape[0]/24,24)
 
 
-# data transformation
 
-n_row=new_test.shape[0]
-
-get_layer1 = K.function([ae1.layers[0].input, K.learning_phase()],[ae1.layers[0].output])
-layer_output11 = get_layer1([new_train])
-layer_output12 = get_layer1([new_test])
-
-get_layer2 = K.function([ae2.layers[0].input, K.learning_phase()],[ae2.layers[0].output])
-layer_output21 = get_layer2([new_train])
-layer_output22 = get_layer2([new_test])
-
-get_layer3 = K.function([ae3.layers[0].input, K.learning_phase()],[ae3.layers[0].output])
-layer_output31 = get_layer3([new_train])
-layer_output32 = get_layer3([new_test])
-
-get_layer4 = K.function([ae4.layers[0].input, K.learning_phase()],[ae4.layers[2].output])
-layer_output41 = get_layer4([new_train])
-layer_output42 = get_layer4([new_test])
-
-h0_train=PCA_model.transform(new_train)
-h1_train=np.array(layer_output11).reshape(new_train.shape[0],15)
-h2_train=np.array(layer_output21).reshape(new_train.shape[0],15)
-h3_train=np.array(layer_output31).reshape(new_train.shape[0],15)
-h4_train=np.array(layer_output41).reshape(new_train.shape[0],15)
-
-h0_test=PCA_model.transform(new_test)
-h1_test=np.array(layer_output12).reshape(new_test.shape[0],15)
-h2_test=np.array(layer_output22).reshape(new_test.shape[0],15)
-h3_test=np.array(layer_output32).reshape(new_test.shape[0],15)
-h4_test=np.array(layer_output42).reshape(new_test.shape[0],15)
+# launching hyperparameters tuning
 
 
-# building linear regression model on original and transformed data and compare accuracy of predictions on dataset using R^2 measure
+random_steps=5
 
-lin_reg=LinearRegression()
+optimize_steps=3
 
-lin_reg.fit(new_train, np.log(new_train2+1))
-print(lin_reg.score(new_test, np.log(new_test2+1)))
-
-lin_reg.fit(h0_train, np.log(new_train2+1))
-print(lin_reg.score(h0_test, np.log(new_test2+1)))
-
-lin_reg.fit(h1_train, np.log(new_train2+1))
-print(lin_reg.score(h1_test, np.log(new_test2+1)))
-
-lin_reg.fit(h2_train, np.log(new_train2+1))
-print(lin_reg.score(h2_test, np.log(new_test2+1)))
-
-lin_reg.fit(h3_train, np.log(new_train2+1))
-print(lin_reg.score(h3_test, np.log(new_test2+1)))
-
-lin_reg.fit(h4_train, np.log(new_train2+1))
-print(lin_reg.score(h4_test, np.log(new_test2+1)))
+model='recurrent_forward'
 
 
-# Data transformed by autoencoders with "tanh" activation function give better predictions so they are going to be overwrite and used in further mdoels
-
-new_z=np.array(get_layer3([new_x])).reshape(new_x.shape[0],15)
-
-x2=pd.concat([x,pd.DataFrame(new_z)],axis=1)
-
-x2.to_csv('~/Desktop/energy/repo/new_train.csv')
+tune_job=random_tuning_job(model,z_train, z_test, x_train, x_test, y_train, y_test, random_steps)
 
 
-# transforming and overwriting test data (we used previosuly pretrained standard scaler and autoencoeders)                    
-                     
-df_test=pd.read_csv("~/Desktop/energy/test_data.csv")
+for i in range(optimize_steps):
 
-zt=df_test[['cro2','cro3','cro4','cro5','ma_cro2','ma_cro3','sd_cro1','sd_cro2','ratio_cro1','ratio_cro2',
-        'fix2','fix3','fix4','fix5','fix6','ma_fix2','ma_fix3','ma_fix4','sd_fix1','sd_fix2',
-        'se2','se3','se4']]
+    good_params=tune_job.sort_values(by='mse_error')[0:3]
+    good_params=good_params.reset_index()
 
-xt=df_test[['rdn','deman','supply','wind_prod','reserve']]
+    best_params=good_params[0:2]
 
-new_zt=model0.transform(zt)
+    tune_job1=evolution_tuning_job(model, z_train, z_test, x_train, x_test, y_train, y_test, good_params)
 
-new_zt2=np.array(get_layer3([new_zt])).reshape(new_zt.shape[0],15)
+    tune_job2=genetic_tuning_job(model, z_train, z_test, x_train, x_test, y_train, y_test, best_params)
 
-new_xt=pd.concat([xt,pd.DataFrame(new_zt2)],axis=1)
+    tune_job=pd.concat([tune_job,tune_job1,tune_job2],axis=0)
 
-new_xt.to_csv('~/Desktop/energy/repo/new_test.csv')
+
+good_params=tune_job.sort_values(by='mse_error')[0:10]
+print(good_params)
