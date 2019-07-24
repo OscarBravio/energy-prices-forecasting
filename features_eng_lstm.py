@@ -91,29 +91,15 @@ def mse_error(y_pred, y_real):
     return(z)
 
 
-def rnn_model(model, x, y, rnn_neurons1, rnn_neurons2, activs, n_iter, l1_reg, l2_reg, drop_out1, drop_out2):
+def rnn_model(x, y, rnn_neurons1, rnn_neurons2, activs, n_iter, l1_reg, l2_reg, drop_out1, drop_out2):
 
-    if model=='forward_rucurrent':
 
-        rnn=Sequential()
-        rnn.add(LSTM(rnn_neurons1, activity_regularizer=l1_l2(l1=l1_reg, l2=l2_reg), input_shape=(24, x.shape[2])))
-        rnn.add(Dropout(drop_out1))
-        rnn.add(Dense(rnn_neurons2, activation=activs, input_dim=rnn_neurons1))
-        rnn.add(Dropout(drop_out2))
-        rnn.add(Dense(24, activation='linear', input_dim=rnn_neurons2))
-
-    elif model=='recurrent_forward':
-
-        rnn=Sequential()
-        rnn.add(Dense(rnn_neurons1, activation=activs, activity_regularizer=l1_l2(l1=l1_reg, l2=l2_reg), input_shape=(24, x.shape[2])))
-        rnn.add(Dropout(drop_out1))
-        rnn.add(LSTM(rnn_neurons2, input_dim=rnn_neurons1))
-        rnn.add(Dropout(drop_out2))
-        rnn.add(Dense(24, activation='linear', input_dim=rnn_neurons2))
-
-    else:
-
-        print('WRONG MODEL!!!')
+    rnn=Sequential()
+    rnn.add(Dense(rnn_neurons1, activation=activs, activity_regularizer=l1_l2(l1=l1_reg, l2=l2_reg), input_shape=(24, x.shape[2])))
+    rnn.add(Dropout(drop_out1))
+    rnn.add(LSTM(rnn_neurons2, input_dim=rnn_neurons1))
+    rnn.add(Dropout(drop_out2))
+    rnn.add(Dense(24, activation='linear', input_dim=rnn_neurons2))
 
     rnn.compile(loss='mean_squared_error', optimizer='adam')
     rnn.fit(x, y, epochs=n_iter, batch_size=32)
@@ -121,12 +107,12 @@ def rnn_model(model, x, y, rnn_neurons1, rnn_neurons2, activs, n_iter, l1_reg, l
     return(rnn)
 
 
-def tuning_job(model, x_train, x_test, y_train, y_test, l1_reg, l2_reg, drop_out1, drop_out2,
+def tuning_job(x_train, x_test, y_train, y_test, l1_reg, l2_reg, drop_out1, drop_out2,
                rnn_neurons1, rnn_neurons2, rnn_activs, nn_iter2):
 
     x_ts=np.array(x_train).reshape(x_train.shape[0]/24,24,x_train.shape[1])
 
-    rnn=rnn_model(model, x_ts, y_train, rnn_neurons1, rnn_neurons2, rnn_activs, nn_iter2, l1_reg, l2_reg, drop_out1, drop_out2)
+    rnn=rnn_model(x_ts, y_train, rnn_neurons1, rnn_neurons2, rnn_activs, nn_iter2, l1_reg, l2_reg, drop_out1, drop_out2)
 
     x_ts=np.array(x_test).reshape(x_test.shape[0]/24,24,x_test.shape[1])
 
@@ -139,10 +125,10 @@ def tuning_job(model, x_train, x_test, y_train, y_test, l1_reg, l2_reg, drop_out
     return(error)
 
 
-def random_tuning_job(model, x_train, x_test, y_train, y_test, n):
+def random_tuning_job(x_train, x_test, y_train, y_test, n):
 
-    rnn_neurons1=sample_neurons(n,50)
-    rnn_neurons2=sample_neurons(n,50)
+    rnn_neurons1=sample_neurons(n,100)
+    rnn_neurons2=sample_neurons(n,100)
     rnn_activs=sample_activs(n)
     
     l1_reg=sample_reg(n) 
@@ -156,7 +142,7 @@ def random_tuning_job(model, x_train, x_test, y_train, y_test, n):
 
     for i in range(n):
 
-        error=tuning_job(model, x_train, x_test, y_train, y_test, l1_reg[i], l2_reg[i], drop_out1[i], drop_out2[i],
+        error=tuning_job(x_train, x_test, y_train, y_test, l1_reg[i], l2_reg[i], drop_out1[i], drop_out2[i],
                rnn_neurons1[i], rnn_neurons2[i], rnn_activs[i], nn_iter2[i])
 
         evaluate.append(error)
@@ -196,7 +182,7 @@ def evolution_tuning_job(model, x_train, x_test, y_train, y_test, good_params):
 
     for i in range(n):
 
-        error=tuning_job(model, x_train, x_test, y_train, y_test, l1_reg[i], l2_reg[i], drop_out1[i], drop_out2[i],
+        error=tuning_job(x_train, x_test, y_train, y_test, l1_reg[i], l2_reg[i], drop_out1[i], drop_out2[i],
                rnn_neurons1[i], rnn_neurons2[i], rnn_activs[i], nn_iter2[i])
 
         evaluate.append(error)
@@ -220,16 +206,16 @@ def evolution_tuning_job(model, x_train, x_test, y_train, y_test, good_params):
 
 
 train_df=pd.read_csv("~/Oskar/energy-prices-forecasting/new_train.csv")
-test_df=pd.read_csv("~/Oskar/energy-prices-forecasting/new_test.csv")
+test_df=pd.read_csv("~/Oskar/energy-prices-forecasting/new_val.csv")
 
 
 # choosing fundamental features
 
-y_train=train_df['cro']
-x_train=train_df.drop(['Unnamed: 0','cro','rdn'],axis=1)
+y_train=train_df['label']
+x_train=train_df.drop(['Unnamed: 0','label'],axis=1)
 
-y_test=test_df['cro']
-x_test=test_df.drop(['Unnamed: 0','cro','rdn'],axis=1)
+y_test=test_df['label']
+x_test=test_df.drop(['Unnamed: 0','label'],axis=1)
 
 
 # scaling data
@@ -261,26 +247,42 @@ y_train3=y_train2.reshape(y_train2.shape[0]/24,24)
 y_test3=y_test2.reshape(y_test2.shape[0]/24,24)
 
 
-
-#model='forward_rucurrent'
-
-
 # launching hyperparameters tuning
 
-eee1=random_tuning_job('forward_rucurrent', x_train, x_test, y_train3, y_test3, 15).sort_values(by='mse_error')
+eee=random_tuning_job(x_train, x_test, y_train3, y_test3, 15).sort_values(by='mse_error')
 
-eee2=random_tuning_job('recurrent_forward', x_train, x_test, y_train3, y_test3, 15).sort_values(by='mse_error')
 
-x_ts=np.array(x_train).reshape(x_train.shape[0]/24,24,x_train.shape[1])
+# train model
 
-rnn=rnn_model('forward_rucurrent', x_ts, y_train3, 33, 39, 'relu', 200, 0.2, 0.2, 0.2, 0.05)
+x_train4=pd.concat([pd.DataFrame(x_train2),pd.DataFrame(x_test2)],axis=0)
+y_train4=pd.concat([pd.DataFrame(y_train2),pd.DataFrame(y_test2)],axis=0)
 
-x_ts=np.array(x_test).reshape(x_test.shape[0]/24,24,x_test.shape[1])
+x_train5=np.array(x_train4).reshape(x_train4.shape[0]/24,24,x_train4.shape[1])
+y_train5=np.array(y_train4).reshape(y_train4.shape[0]/24,24)
 
-pred=rnn.predict(x_ts)*y_sd+y_mean
-                
-pred=pred.reshape(6*24,)
 
-plt.plot(pred[0:48],color='green')
-plt.plot(y_test[0:48],color='blue')
-plt.show()
+#model=rnn_model(x, y, rnn_neurons1, rnn_neurons2, activs, n_iter, l1_reg, l2_reg, drop_out1, drop_out2)
+
+mode=rnn_model(x_train5, y_train5, 44, 26, 'tanh', 200, 0.4, 0, 0, 0)
+
+
+# test data
+
+test_df=pd.read_csv("~/Oskar/energy-prices-forecasting/new_test.csv")
+
+y_test=test_df['label']
+x_test=test_df.drop(['Unnamed: 0','label'],axis=1)
+
+x_test2=model1.transform(x_test)
+x_test3=np.array(x_test2).reshape(x_test2.shape[0]/24,24,x_test2.shape[1])
+
+y_test2=(y_test-y_mean)/y_sd
+y_test3=np.array(y_test2).reshape(y_test2.shape[0]/24,24)
+
+
+# predictions
+
+pred=mode.predict(x_test3)
+pred=pred.reshape(24,)*y_sd+y_mean
+
+pd.Series(pred).to_csv('cro_prediction_lstm.csv')

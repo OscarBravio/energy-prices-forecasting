@@ -29,12 +29,18 @@ plot(df$ma_rdn_168,col=kol1)
 
 # train-test split
 
-df2=subset(df, day>9)
+max(df$day)
+min(df$day)
 
-train_split=round((max(df2$day)-min(df2$day))*0.67)+min(df2$day)
+df2=subset(df, day>-1)
 
-train_df=subset(df, day>10)
-test_df=df[481:nrow(df),]
+train_split=round((max(df2$day)-min(df2$day))*0.7)+min(df2$day)
+
+train_df=subset(df2, day<train_split)
+test_df=subset(df2, day>=train_split)
+
+dim(train_df)
+dim(test_df)
 
 
 # building ARIMA models
@@ -43,6 +49,9 @@ x_cols=c('demand','supply1','supply2','wind','reserve')
 
 rdn_ts=ts(train_df$lag_rdn_24, frequency=24)
 cro_ts=ts(train_df$lag_cro_72, frequency=24)
+
+#auto.arima(rdn_ts)
+#auto.arima(cro_ts)
 
 model1=arimax(log(rdn_ts+1),order=c(1,1,1),seasonal=c(1,0,0),xreg=train_df[x_cols])
 
@@ -89,6 +98,10 @@ for (i in 1:iters){
     y1=ts(c(as.vector(y1),y_test1[(1+24*(i-1)):(24*i)]),frequency=24)
     y2=ts(c(as.vector(y2),y_test2[(1+24*(i-1)):(24*i)]),frequency=24)
     
+    print(pred_t1)
+    Sys.sleep(1)
+    print(pred_t2)
+    Sys.sleep(2)
 }
 
 # because logarithm of price was forecasted, we have to invert transformation back to original price

@@ -110,6 +110,24 @@ def rnn_model(model, x, y, rnn_neurons1, rnn_neurons2, activs, n_iter, l1_reg, l
         rnn.add(SimpleRNN(rnn_neurons2, activation=activs, input_dim=rnn_neurons1))
         rnn.add(Dropout(drop_out2))
         rnn.add(Dense(24, activation='linear', input_dim=rnn_neurons2))
+        
+    elif model=='forward_lstm':
+
+        rnn=Sequential()
+        rnn.add(LSTM(rnn_neurons1, activity_regularizer=l1_l2(l1=l1_reg, l2=l2_reg), input_shape=(24, x.shape[2])))
+        rnn.add(Dropout(drop_out1))
+        rnn.add(Dense(rnn_neurons2, activation=activs, input_dim=rnn_neurons1))
+        rnn.add(Dropout(drop_out2))
+        rnn.add(Dense(24, activation='linear', input_dim=rnn_neurons2))
+        
+    elif model=='lstm_forward':
+
+        rnn=Sequential()
+        rnn.add(Dense(rnn_neurons1, activation=activs, activity_regularizer=l1_l2(l1=l1_reg, l2=l2_reg), input_shape=(24, x.shape[2])))
+        rnn.add(Dropout(drop_out1))
+        rnn.add(LSTM(rnn_neurons2, input_dim=rnn_neurons1))
+        rnn.add(Dropout(drop_out2))
+        rnn.add(Dense(24, activation='linear', input_dim=rnn_neurons2))
 
     else:
 
@@ -150,7 +168,7 @@ def random_tuning_job(model, x_train, x_test, y_train, y_test, n):
     drop_out1=sample_reg(n) 
     drop_out2=sample_reg(n)
 
-    nn_iter2=np.random.uniform(100,2000,size=n).astype('int')
+    nn_iter2=np.random.uniform(500,2000,size=n).astype('int')
 
     evaluate=[]
 
@@ -220,15 +238,15 @@ def evolution_tuning_job(model, x_train, x_test, y_train, y_test, good_params):
 
 
 train_df=pd.read_csv("~/Oskar/energy-prices-forecasting/new_train.csv")
-test_df=pd.read_csv("~/Oskar/energy-prices-forecasting/new_test.csv")
+test_df=pd.read_csv("~/Oskar/energy-prices-forecasting/new_val.csv")
 
 
 # choosing fundamental features
 
-y_train=train_df['cro']
+y_train=train_df['rdn']
 x_train=train_df.drop(['Unnamed: 0','cro','rdn'],axis=1)
 
-y_test=test_df['cro']
+y_test=test_df['rdn']
 x_test=test_df.drop(['Unnamed: 0','cro','rdn'],axis=1)
 
 
@@ -271,6 +289,10 @@ eee1=random_tuning_job('forward_rucurrent', x_train, x_test, y_train3, y_test3, 
 
 eee2=random_tuning_job('recurrent_forward', x_train, x_test, y_train3, y_test3, 15).sort_values(by='mse_error')
 
+eee3=random_tuning_job('forward_lstm', x_train, x_test, y_train3, y_test3, 15).sort_values(by='mse_error')
+
+eee4=random_tuning_job('lstm_forward', x_train, x_test, y_train3, y_test3, 15).sort_values(by='mse_error')
+
 x_ts=np.array(x_train).reshape(x_train.shape[0]/24,24,x_train.shape[1])
 
 rnn=rnn_model('forward_rucurrent', x_ts, y_train3, 33, 39, 'relu', 200, 0.2, 0.2, 0.2, 0.05)
@@ -280,7 +302,3 @@ x_ts=np.array(x_test).reshape(x_test.shape[0]/24,24,x_test.shape[1])
 pred=rnn.predict(x_ts)*y_sd+y_mean
                 
 pred=pred.reshape(6*24,)
-
-plt.plot(pred[0:48],color='green')
-plt.plot(y_test[0:48],color='blue')
-plt.show()

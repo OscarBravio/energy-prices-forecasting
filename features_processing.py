@@ -7,6 +7,7 @@ Created on Mon Feb  4 16:12:05 2019
 """
 
 import pandas as pd
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 import xgboost as xgb
@@ -18,10 +19,11 @@ import pandas as pd
 import plotly.graph_objs as go
 from IPython.display import Markdown
 from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_curve, precision_recall_curve
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingRegressor
 from keras.models import Sequential
 from keras.layers import Dense, Activation, Dropout, Input, LSTM, SimpleRNN
 from keras.utils import to_categorical
@@ -106,7 +108,7 @@ df2['sd_cro_168']=df2['lag_cro_72'].rolling(168).std()
 
 df2.isnull().sum()
 
-df2=df2.fillna(-100)
+#df2=df2.fillna(-100)
 df2=df2.reset_index()
 
 df3=df2[360:]
@@ -123,17 +125,48 @@ df3['day']=df3['date'].map(lambda x: days_dict[x])
 df3.to_csv('new_df.csv')
 
 
-# k-means models to find stationarity
+# dimensionality reduction
 
 ts_df=['lag_rdn_24','lag_rdn_25','lag_rdn_26','lag_rdn_48','lag_rdn_72','lag_rdn_96','lag_rdn_168','lag_cro_72','lag_se_24','lag_se_48','lag_se_72',
  'ma_rdn_24','ma_rdn_48','ma_rdn_72','ma_rdn_96','ma_rdn_168','med_rdn_24','med_rdn_48','med_rdn_72','med_rdn_96','med_rdn_168','sd_rdn_24','sd_rdn_48',
  'sd_rdn_72','sd_rdn_96','sd_rdn_168','ma_cro_24','ma_cro_48','ma_cro_72','ma_cro_96','ma_cro_168','med_cro_24','med_cro_48','med_cro_72','med_cro_96',
  'med_cro_168','sd_cro_24','sd_cro_48','sd_cro_72','sd_cro_96','sd_cro_168']
 
-ts_df=[
- 'ma_rdn_24','ma_rdn_48','ma_rdn_72','ma_rdn_96','ma_rdn_168','med_rdn_24','med_rdn_48','med_rdn_72','med_rdn_96','med_rdn_168','sd_rdn_24','sd_rdn_48',
- 'sd_rdn_72','sd_rdn_96','sd_rdn_168','ma_cro_24','ma_cro_48','ma_cro_72','ma_cro_96','ma_cro_168','med_cro_24','med_cro_48','med_cro_72','med_cro_96',
- 'med_cro_168','sd_cro_24','sd_cro_48','sd_cro_72','sd_cro_96','sd_cro_168']
+ts_x=df3[ts_df]
 
-week_ma=df2[['ma_rdn_168','ma_cro_168']]
+skaler=StandardScaler()
+skaled_x=skaler.fit_transform(ts_x)
+
+for i in range(3,25):
+    
+    model=PCA(i)
+    model.fit(skaled_x)
+    
+    print('step '+str(i))
+    print(np.sum(model.explained_variance_ratio_))
+    
+    time.sleep(1)
+    
+
+# feature importances
+
+x_cols=['hour','demand','supply1','supply2','supply3','supply4','wind','reserve','day','month']
+
+x=df3[ts_df+x_cols]
+
+model=GradientBoostingRegressor()
+
+model.fit(x,df3['rdn'].fillna(100))
+
+importance1=model.feature_importances_
+
+model.fit(x,df3['cro'].fillna(100))
+
+importance2=model.feature_importances_
+    
+feat_imp1=pd.DataFrame({'feature':x.columns, 'importance':importance1}).sort_values(by='importance',ascending=False)
+print(feat_imp1)
+
+feat_imp2=pd.DataFrame({'feature':x.columns, 'importance':importance2}).sort_values(by='importance',ascending=False)
+print(feat_imp2)
 
